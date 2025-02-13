@@ -8,8 +8,8 @@ import (
 )
 
 func main() {
-	go serveHTTP()
-	go serveStreams()
+	go ServeHTTP()
+	go ServeStreams()
 	sigs := make(chan os.Signal, 1)
 	done := make(chan bool, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)

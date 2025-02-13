@@ -12,7 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func serveHTTP() {
+func ServeHTTP() {
 	router := gin.Default()
 	gin.SetMode(gin.DebugMode)
 	router.LoadHTMLGlob("web/templates/*")
@@ -70,7 +70,7 @@ func PlayHLS(c *gin.Context) {
 	}
 }
 
-//PlayHLSTS send client ts segment
+// PlayHLSTS send client ts segment
 func PlayHLSTS(c *gin.Context) {
 	suuid := c.Param("suuid")
 	if !Config.ext(suuid) {

@@ -15,15 +15,9 @@ var (
 	ErrorStreamExitNoViewer        = errors.New("Stream Exit On Demand No Viewer")
 )
 
-func serveStreams() {
+func ServeStreams() {
 	for k, v := range Config.Streams {
-		if v.OnDemand {
-			log.Println("OnDemand not supported")
-			v.OnDemand = false
-		}
-		if !v.OnDemand {
-			go RTSPWorkerLoop(k, v.URL, v.OnDemand)
-		}
+		go RTSPWorkerLoop(k, v.URL, v.OnDemand)
 	}
 }
 

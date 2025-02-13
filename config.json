@@ -4,8 +4,8 @@
   },
   "streams": {
     "H264_AAC": {
-      "on_demand": false,
-      "url": "rtsp://171.25.232.20/d7b92541b4914c8e98104cba907864f8"
+      "on_demand": true,
+      "url": "<Some URL>"
     }
   }
 }
