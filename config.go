@@ -31,22 +31,42 @@ var (
 	ErrorStreamsLen0                = errors.New("streams len zero")
 )
 
-//Config global
+// Config global
 var Config = loadConfig()
 
-//ConfigST struct
-type ConfigST struct {
-	mutex   sync.RWMutex
-	Server  ServerST            `json:"server"`
-	Streams map[string]StreamST `json:"streams"`
+// RetrySettings struct
+type RetrySettings struct {
+	MaxImmediateRetries        int `json:"max_immediate_retries"`
+	BackoffDelayMinutes        int `json:"backoff_delay_minutes"`
+	MaxTotalRetries            int `json:"max_total_retries"`
+	HealthCheckIntervalMinutes int `json:"health_check_interval_minutes"`
+	ConnectionTimeoutSeconds   int `json:"connection_timeout_seconds"`
 }
 
-//ServerST struct
+// ConfigST struct
+type ConfigST struct {
+	mutex          sync.RWMutex
+	Server         ServerST                  `json:"server"`
+	RetrySettings  RetrySettings             `json:"retry_settings"`
+	Streams        map[string]StreamST       `json:"streams"`
+	offlineStreams map[string]*OfflineStream `json:"-"`
+}
+
+// OfflineStream struct
+type OfflineStream struct {
+	Name          string
+	URL           string
+	LastCheckTime time.Time
+	OnDemand      bool
+	RetryCount    int
+}
+
+// ServerST struct
 type ServerST struct {
 	HTTPPort string `json:"http_port"`
 }
 
-//StreamST struct
+// StreamST struct
 type StreamST struct {
 	URL              string          `json:"url"`
 	Status           bool            `json:"status"`
@@ -58,7 +78,7 @@ type StreamST struct {
 	Cl               map[string]viewer
 }
 
-//Segment HLS cache section
+// Segment HLS cache section
 type Segment struct {
 	dur  time.Duration
 	data []*av.Packet
@@ -110,12 +130,62 @@ func loadConfig() *ConfigST {
 	if err != nil {
 		log.Fatalln(err)
 	}
+	tmp.offlineStreams = make(map[string]*OfflineStream)
 	for i, v := range tmp.Streams {
 		v.Cl = make(map[string]viewer)
 		v.hlsSegmentBuffer = make(map[int]Segment)
 		tmp.Streams[i] = v
 	}
 	return &tmp
+}
+
+// AddToOfflineStreams adds a stream to the offline streams list
+func (element *ConfigST) AddToOfflineStreams(name string, url string, onDemand bool) {
+	element.mutex.Lock()
+	defer element.mutex.Unlock()
+	element.offlineStreams[name] = &OfflineStream{
+		Name:          name,
+		URL:           url,
+		LastCheckTime: time.Now(),
+		OnDemand:      onDemand,
+		RetryCount:    0,
+	}
+}
+
+// RemoveFromOfflineStreams removes a stream from the offline streams list
+func (element *ConfigST) RemoveFromOfflineStreams(name string) {
+	element.mutex.Lock()
+	defer element.mutex.Unlock()
+	delete(element.offlineStreams, name)
+}
+
+// GetOfflineStreams returns a copy of the offline streams map
+func (element *ConfigST) GetOfflineStreams() map[string]*OfflineStream {
+	element.mutex.RLock()
+	defer element.mutex.RUnlock()
+	result := make(map[string]*OfflineStream)
+	for k, v := range element.offlineStreams {
+		result[k] = v
+	}
+	return result
+}
+
+// UpdateOfflineStreamRetryCount increments the retry count for a stream
+func (element *ConfigST) UpdateOfflineStreamRetryCount(name string) {
+	element.mutex.Lock()
+	defer element.mutex.Unlock()
+	if stream, exists := element.offlineStreams[name]; exists {
+		stream.RetryCount++
+	}
+}
+
+// UpdateOfflineStreamLastCheck updates the last check time for a stream
+func (element *ConfigST) UpdateOfflineStreamLastCheck(name string) {
+	element.mutex.Lock()
+	defer element.mutex.Unlock()
+	if stream, exists := element.offlineStreams[name]; exists {
+		stream.LastCheckTime = time.Now()
+	}
 }
 
 func (element *ConfigST) cast(uuid string, pck av.Packet) {
@@ -198,7 +268,7 @@ func pseudoUUID() (uuid string) {
 	return
 }
 
-//StreamHLSAdd add hls seq to buffer
+// StreamHLSAdd add hls seq to buffer
 func (obj *ConfigST) StreamHLSAdd(uuid string, val []*av.Packet, dur time.Duration) {
 	obj.mutex.Lock()
 	defer obj.mutex.Unlock()
@@ -212,7 +282,7 @@ func (obj *ConfigST) StreamHLSAdd(uuid string, val []*av.Packet, dur time.Durati
 	}
 }
 
-//StreamHLSm3u8 get hls m3u8 list
+// StreamHLSm3u8 get hls m3u8 list
 func (obj *ConfigST) StreamHLSm3u8(uuid string) (string, int, error) {
 	obj.mutex.RLock()
 	defer obj.mutex.RUnlock()
@@ -236,7 +306,7 @@ func (obj *ConfigST) StreamHLSm3u8(uuid string) (string, int, error) {
 	return "", 0, ErrorStreamNotFound
 }
 
-//StreamHLSTS send hls segment buffer to clients
+// StreamHLSTS send hls segment buffer to clients
 func (obj *ConfigST) StreamHLSTS(uuid string, seq int) ([]*av.Packet, error) {
 	obj.mutex.RLock()
 	defer obj.mutex.RUnlock()
@@ -248,7 +318,7 @@ func (obj *ConfigST) StreamHLSTS(uuid string, seq int) ([]*av.Packet, error) {
 	return nil, ErrorStreamNotFound
 }
 
-//StreamHLSFlush delete hls cache
+// StreamHLSFlush delete hls cache
 func (obj *ConfigST) StreamHLSFlush(uuid string) {
 	obj.mutex.Lock()
 	defer obj.mutex.Unlock()
@@ -259,7 +329,7 @@ func (obj *ConfigST) StreamHLSFlush(uuid string) {
 	}
 }
 
-//stringToInt convert string to int if err to zero
+// stringToInt convert string to int if err to zero
 func stringToInt(val string) int {
 	i, err := strconv.Atoi(val)
 	if err != nil {

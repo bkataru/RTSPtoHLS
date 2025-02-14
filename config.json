@@ -2,10 +2,17 @@
   "server": {
     "http_port": ":8083"
   },
+  "retry_settings": {
+    "max_immediate_retries": 3,
+    "backoff_delay_minutes": 10,
+    "max_total_retries": 4,
+    "health_check_interval_minutes": 30,
+    "connection_timeout_seconds": 60
+  },
   "streams": {
     "H264_AAC": {
       "on_demand": true,
-      "url": "<Some URL>"
+      "url": "rtsp://171.25.232.20/d7b92541b4914c8e98104cba907864f8"
     }
   }
 }
